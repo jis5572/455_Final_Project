@@ -22,7 +22,7 @@ function varargout = project_gui(varargin)
 
 % Edit the above text to modify the response to help project_gui
 
-% Last Modified by GUIDE v2.5 08-Dec-2014 21:38:57
+% Last Modified by GUIDE v2.5 10-Dec-2014 03:08:57
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -87,9 +87,30 @@ I = imread('cameraman.tif');
 global len;
 global theta;
 global noisyI;
+global wnoise;
 global blurredI; 
 
 
+name = get(handles.popupmenu1,'Value');
+
+switch name
+    case 1
+        I = imread('cameraman.tif');
+    case 2
+        I = imread('circuit.tif');
+    case 3
+        I = imread('Trees.jpg');
+        I = rgb2gray(I);
+    case 4
+        I = imread('Rec.jpg');
+        I = rgb2gray(I);
+    case 5
+        I = imread('Eisenhower.jpg');
+        I = rgb2gray(I);
+    case 6
+        I = imread('Arts.jpg');
+        I = rgb2gray(I);
+end
 
 axes(handles.axes1);
 imshow(I);
@@ -105,12 +126,17 @@ len = str2num(sLen);
 
 sTheta = get(handles.edit4, 'String');
 theta = str2num(sTheta);
-
+wnoise = 0.5*randn(size(I));  
 blurredI = addBlur(noisyI);
 
 axes(handles.axes6);
 imshow(blurredI);
 
+cla(handles.axes3);
+cla(handles.axes2);
+
+set(handles.edit1, 'String', '');
+set(handles.edit2, 'String', '');
 
 
 end
@@ -150,15 +176,51 @@ b = imfilter(I, PSF, 'circular', 'conv');
 end
 
 %Performs Wiener deconvolution to image Im using NSR
-function w = fWiener(Im)
-global noise;
+function w = fWiener(Im, n, handles)
 global I;
 global len; 
 global theta;
-global NSR;
-NSR = sum(noise(:).^2)/sum(im2double(I(:)).^2); %Calculate NSR
+
+% NSR = sum(n(:).^2)/sum(im2double(I(:)).^2); %Calculate NSR
+
+% c.) Compute autocorrelation functions & apply Weiner Filter
+NP = abs(fftn(n)).^2;
+NPOW = sum(NP(:))/prod(size(n)); %noise power
+NCORR = fftshift(real(ifftn(NP))); %noise ACF, centered
+IP = abs(fftn(im2double(I))).^2; 
+IPOW = sum(IP(:))/prod(size(I)); %original image power
+ICORR = fftshift(real(ifftn(IP))); %image ACF, centered
 PSF = calcPSF(len, theta);
-w = deconvwnr(Im, PSF, 1);
+w = deconvwnr(Im, PSF, NCORR, ICORR);
+
+% w = deconvwnr(Im, PSF, NSR);
+
+SNR = snr(w, I);
+set(handles.edit1, 'String', SNR);
+
+end
+
+function lr = fLucyRich(bI, handles)
+global len;
+global theta;
+global I;
+
+damparArray = I;
+
+
+sNumit = get(handles.edit5,'String');
+numit = str2num(sNumit);
+
+sDampar = get(handles.edit6,'String');
+dampar = str2num(sDampar);
+
+damparArray(:,:) = dampar;
+PSF = calcPSF(len, theta);
+lr = deconvlucy(bI, PSF, numit, damparArray);
+
+SNR = snr(lr,I);
+%set(SNR,handles.edit2,'String');
+set(handles.edit2,'String',SNR);
 
 end
 
@@ -222,6 +284,9 @@ global len;
 global theta;
 global noisyI;
 global blurredI;
+global wnoise;
+global I;
+
 
 
 sLen = get(handles.edit3, 'String');
@@ -231,10 +296,20 @@ sTheta = get(handles.edit4, 'String');
 theta = str2num(sTheta);
 
 blurredI = addBlur(noisyI);
+axes(handles.axes6);
+imshow(blurredI);
 
-wienerI = fWiener(blurredI);
+wienerI = fWiener(blurredI, wnoise, handles);
 axes(handles.axes2);
 imshow(wienerI);
+
+lucyRichI = fLucyRich(blurredI, handles);
+axes(handles.axes3);
+imshow(lucyRichI);
+
+
+blurNoiseSNR = snr(blurredI, I);
+set(handles.edit7, 'String', blurNoiseSNR);
 
 end
 
@@ -277,6 +352,77 @@ end
 % --- Executes during object creation, after setting all properties.
 function edit4_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to edit4 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+end
+
+
+
+function edit5_Callback(hObject, eventdata, handles)
+% hObject    handle to edit5 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of edit5 as text
+%        str2double(get(hObject,'String')) returns contents of edit5 as a double
+
+end
+% --- Executes during object creation, after setting all properties.
+function edit5_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to edit5 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+end
+
+function edit6_Callback(hObject, eventdata, handles)
+% hObject    handle to edit6 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of edit6 as text
+%        str2double(get(hObject,'String')) returns contents of edit6 as a double
+
+end
+% --- Executes during object creation, after setting all properties.
+function edit6_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to edit6 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+end
+
+
+
+function edit7_Callback(hObject, eventdata, handles)
+% hObject    handle to edit7 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of edit7 as text
+%        str2double(get(hObject,'String')) returns contents of edit7 as a double
+
+end
+% --- Executes during object creation, after setting all properties.
+function edit7_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to edit7 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    empty - handles not created until after all CreateFcns called
 
